@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mekan Sunum Generator</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cream:#FAF8F4;--dark:#1A1A1A;--mid:#6B6B6B;--border:#E2DED8;
+  --accent:#C9A84C;--bg:#EDEAE4;--sidebar:#1A1A1A;--sidebar-w:260px;
+}
+body{background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--dark);height:100vh;display:flex;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{width:var(--sidebar-w);background:var(--sidebar);display:flex;flex-direction:column;flex-shrink:0;height:100vh}
+.sidebar-header{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sidebar-logo{font-family:'Playfair Display',serif;font-size:11px;letter-spacing:.2em;color:rgba(255,255,255,.4);text-transform:uppercase;margin-bottom:4px}
+.sidebar-title{font-family:'Playfair Display',serif;font-size:18px;color:white;font-weight:400}
+
+.page-list{flex:1;overflow-y:auto;padding:12px 0}
+.page-list::-webkit-scrollbar{width:4px}
+.page-list::-webkit-scrollbar-track{background:transparent}
+.page-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:2px}
+
+.page-item{display:flex;align-items:center;gap:10px;padding:10px 16px;cursor:pointer;transition:background .15s;border-left:3px solid transparent;position:relative}
+.page-item:hover{background:rgba(255,255,255,.06)}
+.page-item.active{background:rgba(255,255,255,.1);border-left-color:var(--accent)}
+.page-thumb{width:52px;height:30px;border-radius:2px;object-fit:cover;background:rgba(255,255,255,.1);flex-shrink:0}
+.page-thumb.empty{display:flex;align-items:center;justify-content:center;font-size:14px;color:rgba(255,255,255,.2)}
+.page-info{flex:1;min-width:0}
+.page-num{font-size:9px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.35);margin-bottom:2px}
+.page-name{font-size:12px;color:rgba(255,255,255,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.page-name.placeholder{color:rgba(255,255,255,.25);font-style:italic}
+.page-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.page-status.done{background:#2ecc71}
+.page-status.empty{background:rgba(255,255,255,.2)}
+.page-del{background:none;border:none;color:rgba(255,255,255,.25);cursor:pointer;font-size:15px;padding:2px 4px;border-radius:2px;opacity:0;transition:opacity .15s}
+.page-item:hover .page-del{opacity:1}
+.page-del:hover{color:#e74c3c;background:rgba(231,76,60,.15)}
+
+.add-page-btn{margin:10px 16px;padding:10px;border:1.5px dashed rgba(255,255,255,.15);border-radius:4px;background:none;color:rgba(255,255,255,.4);cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;transition:all .2s;width:calc(100% - 32px)}
+.add-page-btn:hover{border-color:rgba(255,255,255,.4);color:rgba(255,255,255,.7);background:rgba(255,255,255,.05)}
+
+.sidebar-footer{padding:14px 16px;border-top:1px solid rgba(255,255,255,.1);display:flex;flex-direction:column;gap:8px}
+.export-btn{padding:11px;border:none;border-radius:3px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s;text-align:center}
+.export-pdf{background:white;color:var(--dark)}
+.export-pdf:hover{background:#eee}
+.export-pptx{background:#C0392B;color:white}
+.export-pptx:hover{background:#a93226}
+.export-both{background:var(--accent);color:white}
+.export-both:hover{background:#b8923e}
+.export-btn:disabled{opacity:.4;cursor:not-allowed}
+.export-count{font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:2px}
+
+/* ── Main ── */
+.main{flex:1;overflow-y:auto;padding:32px;display:flex;flex-direction:column;align-items:center}
+.main::-webkit-scrollbar{width:6px}
+.main::-webkit-scrollbar-track{background:transparent}
+.main::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.editor{width:100%;max-width:700px}
+
+.section{background:white;border:1px solid var(--border);padding:28px;margin-bottom:14px;border-radius:2px}
+.section h2{font-family:'Playfair Display',serif;font-size:16px;font-weight:400;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.section h2 .pg-badge{font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:.1em;background:var(--dark);color:white;padding:3px 8px;border-radius:2px}
+
+.fields-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.field{margin-bottom:12px}
+.field:last-child{margin-bottom:0}
+label{display:block;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--mid);margin-bottom:6px}
+input[type=text]{width:100%;border:1px solid var(--border);border-radius:2px;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--dark);background:var(--cream);outline:none;transition:border-color .15s}
+input[type=text]:focus{border-color:var(--dark);background:white}
+
+/* Drop zone */
+.drop-zone{border:1.5px dashed var(--border);border-radius:3px;background:var(--cream);padding:22px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+.drop-zone:hover,.drop-zone.drag-over{border-color:var(--dark);background:#F5F3EE}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-zone p{font-size:12px;color:var(--mid);line-height:1.6}
+.drop-zone strong{color:var(--dark)}
+
+.photo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+.photo-thumb{aspect-ratio:16/9;border-radius:2px;overflow:hidden;position:relative;background:var(--border);cursor:grab}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-thumb .num{position:absolute;bottom:3px;right:3px;background:rgba(20,20,20,.75);color:white;font-size:7px;font-weight:500;padding:2px 5px;border-radius:1px}
+.photo-thumb .remove{position:absolute;top:3px;right:3px;background:rgba(20,20,20,.7);color:white;border:none;border-radius:50%;width:17px;height:17px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s}
+.photo-thumb:hover .remove{opacity:1}
+.photo-count{font-size:11px;color:var(--mid);margin-top:8px}
+.photo-count span{font-weight:500;color:var(--dark)}
+
+/* Preview */
+canvas{width:100%;display:block;border:1px solid var(--border);border-radius:2px}
+.preview-actions{display:flex;gap:8px;margin-top:10px}
+.btn{padding:10px 16px;border:none;border-radius:2px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;transition:all .15s}
+.btn-outline{background:white;border:1px solid var(--border);color:var(--mid)}
+.btn-outline:hover{border-color:var(--dark);color:var(--dark)}
+.btn-dark{background:var(--dark);color:white}
+.btn-dark:hover{background:#333}
+
+.status-bar{font-size:11px;color:var(--mid);padding:8px 0;min-height:28px;text-align:center}
+.status-bar.ok{color:#27ae60;font-weight:500}
+.status-bar.err{color:#c0392b}
+
+/* Empty state */
+.no-page{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;color:var(--mid);text-align:center;gap:12px}
+.no-page .big{font-size:40px}
+.no-page h3{font-family:'Playfair Display',serif;font-size:22px;font-weight:400;color:var(--dark)}
+.no-page p{font-size:13px;line-height:1.7;max-width:320px}
+
+/* Global status */
+#global-status{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--dark);color:white;padding:10px 20px;border-radius:20px;font-size:12px;font-weight:500;opacity:0;transition:opacity .3s;pointer-events:none;z-index:1000;white-space:nowrap}
+#global-status.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ══ SIDEBAR ══ -->
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">locationmanagerturkey.com</div>
+    <div class="sidebar-title">Sunum Generator</div>
+  </div>
+
+  <div class="page-list" id="pageList"></div>
+
+  <button class="add-page-btn" onclick="addPage()">+ Yeni Sayfa Ekle</button>
+
+  <div class="sidebar-footer">
+    <button class="export-btn export-both" onclick="exportAll('both')">⬇ PDF + PPTX İndir</button>
+    <button class="export-btn export-pdf" onclick="exportAll('pdf')">↓ Sadece PDF</button>
+    <button class="export-btn export-pptx" onclick="exportAll('pptx')">↓ Sadece PPTX</button>
+    <div class="export-count" id="exportCount">0 sayfa hazır</div>
+  </div>
+</div>
+
+<!-- ══ MAIN ══ -->
+<div class="main" id="main">
+  <div class="no-page" id="noPage">
+    <div class="big">📋</div>
+    <h3>Sunum Hazırla</h3>
+    <p>Sol taraftan <strong>+ Yeni Sayfa Ekle</strong> butonuna basarak her mekan için bir sayfa oluştur.</p>
+  </div>
+  <div class="editor" id="editor" style="display:none">
+    <div class="section">
+      <h2><span class="pg-badge" id="pgBadge">Sayfa 1</span> Sunum Bilgileri</h2>
+      <div class="fields-row">
+        <div class="field"><label>Şirket Adı</label><input type="text" id="f-sirket" placeholder="PUBLIC FILM" oninput="onFieldChange()"></div>
+        <div class="field"><label>Proje / Prodüksiyon</label><input type="text" id="f-proje" placeholder="TOYOTA" oninput="onFieldChange()"></div>
+      </div>
+      <div class="field"><label>Mekan Adı</label><input type="text" id="f-mekan" placeholder="örn. Maltepe Moda Loft" oninput="onFieldChange()"></div>
+      <div class="field"><label>Google Photos Linki</label><input type="text" id="f-link" placeholder="https://photos.app.goo.gl/..."></div>
+    </div>
+
+    <div class="section">
+      <h2>Fotoğraflar <span style="font-family:'DM Sans';font-size:11px;color:#aaa;font-weight:300;margin-left:4px">4 adet</span></h2>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="photoInput" accept="image/*" multiple>
+        <p><strong>Sürükle ya da tıkla</strong> — JPG / PNG, 4 adet</p>
+      </div>
+      <div class="photo-grid" id="photoGrid"></div>
+      <div class="photo-count" id="photoCount"></div>
+    </div>
+
+    <div class="section">
+      <h2>Önizleme</h2>
+      <canvas id="preview-canvas" width="1200" height="849"></canvas>
+      <div class="preview-actions">
+        <button class="btn btn-outline" onclick="renderPreview()">↺ Yenile</button>
+        <button class="btn btn-dark" onclick="exportSingle('pdf')">↓ Bu sayfayı PDF</button>
+        <button class="btn btn-dark" onclick="exportSingle('pptx')">↓ Bu sayfayı PPTX</button>
+      </div>
+      <div class="status-bar" id="status"></div>
+    </div>
+  </div>
+</div>
+
+<div id="global-status"></div>
+
+<script>
+// ─── State ─────────────────────────────────────────────────────
+// pages: [{id, sirket, proje, mekan, link, photos:[{dataUrl,cropped}], thumbUrl}]
+let pages = [];
+let currentId = null;
+let nextId = 1;
+
+// ─── Page management ───────────────────────────────────────────
+function addPage() {
+  const id = nextId++;
+  pages.push({ id, sirket:'PUBLIC FILM', proje:'', mekan:'', link:'', photos:[], thumbUrl:null });
+  selectPage(id);
+  renderSidebar();
+  document.getElementById('f-mekan').focus();
+}
+
+function selectPage(id) {
+  // Save current before switching
+  if (currentId !== null) saveCurrent();
+  currentId = id;
+  const p = getPage(id);
+  if (!p) return;
+
+  document.getElementById('noPage').style.display = 'none';
+  document.getElementById('editor').style.display = 'block';
+  document.getElementById('pgBadge').textContent = 'Sayfa ' + pages.findIndex(x=>x.id===id)+1;
+  document.getElementById('f-sirket').value = p.sirket || '';
+  document.getElementById('f-proje').value = p.proje || '';
+  document.getElementById('f-mekan').value = p.mekan || '';
+  document.getElementById('f-link').value = p.link || '';
+  renderThumbs(p.photos);
+  renderPreview();
+  renderSidebar();
+}
+
+function saveCurrent() {
+  const p = getPage(currentId);
+  if (!p) return;
+  p.sirket = document.getElementById('f-sirket').value;
+  p.proje  = document.getElementById('f-proje').value;
+  p.mekan  = document.getElementById('f-mekan').value;
+  p.link   = document.getElementById('f-link').value;
+}
+
+function deletePage(id, e) {
+  e.stopPropagation();
+  if (pages.length === 1) { pages = []; currentId = null; renderSidebar(); document.getElementById('noPage').style.display='flex'; document.getElementById('editor').style.display='none'; return; }
+  const idx = pages.findIndex(x=>x.id===id);
+  pages.splice(idx,1);
+  if (currentId === id) {
+    const newIdx = Math.min(idx, pages.length-1);
+    selectPage(pages[newIdx].id);
+  }
+  renderSidebar();
+}
+
+function getPage(id) { return pages.find(x=>x.id===id); }
+
+function onFieldChange() {
+  saveCurrent();
+  renderSidebar();
+  const p = getPage(currentId);
+  if (p && p.photos.length >= 4) debouncePreview();
+}
+
+let previewTimer;
+function debouncePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(renderPreview, 400); }
+
+// ─── Sidebar render ────────────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('pageList');
+  list.innerHTML = '';
+  pages.forEach((p, i) => {
+    const ready = p.photos.length >= 4 && p.mekan;
+    const div = document.createElement('div');
+    div.className = 'page-item' + (p.id === currentId ? ' active' : '');
+    div.onclick = () => selectPage(p.id);
+    div.innerHTML = `
+      ${p.thumbUrl
+        ? `<img class="page-thumb" src="${p.thumbUrl}">`
+        : `<div class="page-thumb empty">📄</div>`}
+      <div class="page-info">
+        <div class="page-num">Sayfa ${i+1}</div>
+        <div class="page-name ${p.mekan?'':'placeholder'}">${p.mekan || 'İsimsiz mekan'}</div>
+      </div>
+      <div class="page-status ${ready?'done':'empty'}"></div>
+      <button class="page-del" onclick="deletePage(${p.id}, event)" title="Sil">×</button>`;
+    list.appendChild(div);
+  });
+  const ready = pages.filter(p=>p.photos.length>=4&&p.mekan).length;
+  document.getElementById('exportCount').textContent = ready + ' / ' + pages.length + ' sayfa hazır';
+}
+
+// ─── Drop zone ─────────────────────────────────────────────────
+const dropZone = document.getElementById('dropZone');
+const photoInput = document.getElementById('photoInput');
+dropZone.addEventListener('dragover', e=>{e.preventDefault();dropZone.classList.add('drag-over');});
+dropZone.addEventListener('dragleave', ()=>dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e=>{e.preventDefault();dropZone.classList.remove('drag-over');handleFiles([...e.dataTransfer.files].filter(f=>f.type.startsWith('image/')));});
+photoInput.addEventListener('change', ()=>{handleFiles([...photoInput.files]); photoInput.value='';});
+
+async function handleFiles(files) {
+  const p = getPage(currentId); if (!p) return;
+  for (const file of files) {
+    if (p.photos.length >= 4) break;
+    const dataUrl = await readFile(file);
+    const cropped = await cropImage(dataUrl, 16/9);
+    p.photos.push({ dataUrl, cropped });
+  }
+  renderThumbs(p.photos);
+  if (p.photos.length >= 4) renderPreview();
+}
+
+function readFile(file) {
+  return new Promise(res=>{const r=new FileReader();r.onload=e=>res(e.target.result);r.readAsDataURL(file);});
+}
+
+function cropImage(src, aspect) {
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const iw=img.width,ih=img.height,ia=iw/ih;
+      let sx=0,sy=0,sw=iw,sh=ih;
+      if(ia>aspect){sw=ih*aspect;sx=(iw-sw)/2;}else{sh=iw/aspect;sy=(ih-sh)/2;}
+      const c=document.createElement('canvas');c.width=Math.round(sw);c.height=Math.round(sh);
+      c.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,c.width,c.height);
+      res(c.toDataURL('image/jpeg',0.97));
+    };img.src=src;
+  });
+}
+
+function renderThumbs(photos) {
+  const grid=document.getElementById('photoGrid');
+  const count=document.getElementById('photoCount');
+  grid.innerHTML='';
+  photos.forEach((ph,i)=>{
+    const div=document.createElement('div');div.className='photo-thumb';
+    div.innerHTML=`<img src="${ph.dataUrl}"><span class="num">0${i+1}</span>
+      <button class="remove" onclick="removePhoto(${i})">×</button>`;
+    grid.appendChild(div);
+  });
+  const n=photos.length;
+  count.innerHTML=n===0?'':`<span>${n}/4</span>${n<4?` — ${4-n} tane daha`:' ✓'}`;
+}
+
+function removePhoto(i) {
+  const p=getPage(currentId);if(!p)return;
+  p.photos.splice(i,1);renderThumbs(p.photos);
+}
+
+// ─── Canvas render ─────────────────────────────────────────────
+const CVS_W=1200,CVS_H=849;
+
+async function renderPreview() {
+  saveCurrent();
+  const p=getPage(currentId);if(!p)return;
+  const canvas=document.getElementById('preview-canvas');
+  const ctx=canvas.getContext('2d');
+  await drawSlide(ctx,CVS_W,CVS_H,p);
+  // save thumbnail
+  p.thumbUrl=canvas.toDataURL('image/jpeg',0.4);
+  renderSidebar();
+}
+
+async function drawSlide(ctx,W,H,p) {
+  const sirket=(p.sirket||'').toUpperCase();
+  const proje=(p.proje||'').toUpperCase();
+  const mekan=p.mekan||'Mekan Adı';
+  await document.fonts.load('48px "Playfair Display"');
+
+  ctx.fillStyle='#FAF8F4';ctx.fillRect(0,0,W,H);
+
+  ctx.fillStyle='#262626';ctx.font='500 20px "DM Sans"';ctx.textBaseline='top';
+  ctx.fillText(sirket+(proje?' / '+proje:''),52,26);
+  ctx.textAlign='right';ctx.font='300 20px "DM Sans"';ctx.fillStyle='#555';
+  ctx.fillText('www.locationmanagerturkey.com',W-52,26);ctx.textAlign='left';
+
+  ctx.font='400 108px "Playfair Display"';ctx.fillStyle='#1A1A1A';
+  ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(mekan,W/2,55);ctx.textAlign='left';
+
+  const MX=52,titleH=55+108+14,btnH=70;
+  const gridTop=titleH,gridBot=H-btnH,gridH=gridBot-gridTop,gridW=W-MX*2;
+  const gap=8,cellW=(gridW-gap)/2,cellH=(gridH-gap)/2;
+  const pos=[[MX,gridTop],[MX+cellW+gap,gridTop],[MX,gridTop+cellH+gap],[MX+cellW+gap,gridTop+cellH+gap]];
+
+  for(let i=0;i<4;i++){
+    const[x,y]=pos[i];
+    if(p.photos[i]){
+      await new Promise(res=>{
+        const img=new Image();
+        img.onload=()=>{
+          ctx.drawImage(img,x,y,cellW,cellH);
+          ctx.fillStyle='rgba(20,20,20,.75)';ctx.fillRect(x+cellW-40,y+cellH-24,40,24);
+          ctx.fillStyle='white';ctx.font='500 16px "DM Sans"';
+          ctx.textAlign='center';ctx.textBaseline='middle';
+          ctx.fillText('0'+(i+1),x+cellW-20,y+cellH-12);
+          ctx.textAlign='left';ctx.textBaseline='top';res();
+        };img.src=p.photos[i].cropped;
+      });
+    } else {
+      ctx.fillStyle='#E8E4DF';ctx.fillRect(x,y,cellW,cellH);
+      ctx.fillStyle='#CCC';ctx.font='300 22px "DM Sans"';
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText('Fotoğraf '+(i+1),x+cellW/2,y+cellH/2);
+      ctx.textAlign='left';ctx.textBaseline='top';
+    }
+  }
+  const bW=270,bX=(W-bW)/2,bY=H-56;
+  ctx.fillStyle='#1A1A1A';ctx.fillRect(bX,bY,bW,38);
+  ctx.fillStyle='white';ctx.font='400 18px "Playfair Display"';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('TÜM FOTOĞRAFLARI GÖR  →',W/2,bY+19);
+  ctx.textAlign='left';ctx.textBaseline='top';
+}
+
+// ─── Export helpers ────────────────────────────────────────────
+async function renderPageToJpeg(p) {
+  const cvs=document.createElement('canvas');cvs.width=2480;cvs.height=1754;
+  const ctx=cvs.getContext('2d');ctx.scale(2480/CVS_W,1754/CVS_H);
+  await drawSlide(ctx,CVS_W,CVS_H,p);
+  return cvs.toDataURL('image/jpeg',0.97);
+}
+
+async function pageToPDFBytes(p) {
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+  const imgData=await renderPageToJpeg(p);
+  doc.addImage(imgData,'JPEG',0,0,297,210);
+  if(p.link) doc.link(113.5,198,70,10,{url:p.link});
+  return doc.output('arraybuffer');
+}
+
+function addSlideToPresentation(pres,p) {
+  const W=11.69,H=8.27;
+  const sirket=(p.sirket||'').toUpperCase();
+  const proje=(p.proje||'').toUpperCase();
+  const slide=pres.addSlide();
+  slide.background={color:'FAF8F4'};
+  slide.addText(sirket+(proje?' / '+proje:''),{x:.55,y:.2,w:5,h:.28,fontSize:9,fontFace:'Helvetica',color:'262626',margin:0});
+  slide.addText('www.locationmanagerturkey.com',{x:W-4.2,y:.2,w:3.65,h:.28,fontSize:9,fontFace:'Helvetica',color:'555555',align:'right',margin:0});
+  slide.addText(p.mekan||'Mekan',{x:.55,y:.5,w:W-1.1,h:1.05,fontSize:54,fontFace:'Palatino Linotype',color:'1A1A1A',align:'center',margin:0});
+  const MX=.55,gridTop=1.6,gridBot=H-.8,gridH=gridBot-gridTop,gridW=W-MX*2;
+  const gap=.07,cellW=(gridW-gap)/2,cellH=(gridH-gap)/2;
+  const pos=[[MX,gridTop],[MX+cellW+gap,gridTop],[MX,gridTop+cellH+gap],[MX+cellW+gap,gridTop+cellH+gap]];
+  for(let i=0;i<4;i++){
+    const[x,y]=pos[i];
+    if(!p.photos[i])continue;
+    slide.addImage({data:p.photos[i].cropped,x,y,w:cellW,h:cellH,sizing:{type:'cover',w:cellW,h:cellH}});
+    const bw=.32,bh=.22;
+    slide.addShape(pres.shapes.RECTANGLE,{x:x+cellW-bw,y:y+cellH-bh,w:bw,h:bh,fill:{color:'1A1A1A'},line:{color:'1A1A1A'}});
+    slide.addText('0'+(i+1),{x:x+cellW-bw,y:y+cellH-bh,w:bw,h:bh,fontSize:7,fontFace:'Helvetica',color:'FFFFFF',align:'center',valign:'middle',margin:0});
+  }
+  const bW=2.5,bH=.38,bX=(W-bW)/2,bY=H-.7;
+  slide.addShape(pres.shapes.RECTANGLE,{x:bX,y:bY,w:bW,h:bH,fill:{color:'1A1A1A'},line:{color:'1A1A1A'}});
+  slide.addText('TÜM FOTOĞRAFLARI GÖR  →',{x:bX,y:bY,w:bW,h:bH,fontSize:9,fontFace:'Palatino Linotype',color:'FFFFFF',align:'center',valign:'middle',margin:0,...(p.link?{hyperlink:{url:p.link}}:{})});
+}
+
+function downloadBlob(buf,mime,name){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([buf],{type:mime}));
+  a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function getReadyPages() { return pages.filter(p=>p.photos.length>=4&&p.mekan); }
+
+// ─── Single page export ────────────────────────────────────────
+async function exportSingle(type) {
+  saveCurrent();
+  const p=getPage(currentId);if(!p)return;
+  if(p.photos.length<4||!p.mekan){setStatus('Mekan adı ve 4 fotoğraf gerekli.','err');return;}
+  const name=p.mekan.replace(/\s+/g,'_');
+  setStatus('Hazırlanıyor…','');
+  if(type==='pdf'){
+    const b=await pageToPDFBytes(p);downloadBlob(b,'application/pdf',name+'.pdf');
+    setStatus('PDF indirildi ✓','ok');
+  } else {
+    const pres=new PptxGenJS();pres.defineLayout({name:'A4L',width:11.69,height:8.27});pres.layout='A4L';
+    addSlideToPresentation(pres,p);
+    await pres.writeFile({fileName:name+'.pptx'});
+    setStatus('PPTX indirildi ✓','ok');
+  }
+}
+
+// ─── All pages export ──────────────────────────────────────────
+async function exportAll(type) {
+  saveCurrent();
+  const ready=getReadyPages();
+  if(ready.length===0){showGlobal('Hazır sayfa yok! Mekan adı ve 4 fotoğraf ekleyin.');return;}
+  showGlobal('Hazırlanıyor… ('+ready.length+' sayfa)');
+
+  const suffix = ready.length===1 ? ready[0].mekan.replace(/\s+/g,'_') : 'Sunum_'+ready.length+'_Mekan';
+
+  if(type==='pdf'||type==='both'){
+    const {PDFDocument}=PDFLib;
+    const merged=await PDFDocument.create();
+    for(const p of ready){
+      const bytes=await pageToPDFBytes(p);
+      const src=await PDFDocument.load(bytes);
+      const pg=await merged.copyPages(src,src.getPageIndices());
+      pg.forEach(pg2=>merged.addPage(pg2));
+    }
+    const out=await merged.save();
+    downloadBlob(out.buffer,'application/pdf',suffix+'.pdf');
+  }
+
+  if(type==='pptx'||type==='both'){
+    await new Promise(r=>setTimeout(r,400));
+    const pres=new PptxGenJS();pres.defineLayout({name:'A4L',width:11.69,height:8.27});pres.layout='A4L';
+    for(const p of ready) addSlideToPresentation(pres,p);
+    await pres.writeFile({fileName:suffix+'.pptx'});
+  }
+
+  showGlobal(ready.length+' sayfa indirildi ✓');
+}
+
+function setStatus(msg,cls){const e=document.getElementById('status');e.textContent=msg;e.className='status-bar '+(cls||'');}
+
+let gTimer;
+function showGlobal(msg){
+  const el=document.getElementById('global-status');
+  el.textContent=msg;el.classList.add('show');
+  clearTimeout(gTimer);gTimer=setTimeout(()=>el.classList.remove('show'),3500);
+}
+
+// ─── Init ──────────────────────────────────────────────────────
+addPage();
+</script>
+</body>
+</html>
